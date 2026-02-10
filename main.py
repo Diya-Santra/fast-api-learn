@@ -1,52 +1,54 @@
-from fastapi import FastAPI,Path,HTTPException,Query
-import json
+from pydantic import BaseModel,EmailStr,Field,field_validator,model_validator,computed_field
+from typing import List,Dict,Optional,Annotated
 
+class Patient(BaseModel):
+    name:str
+    email:EmailStr
+    age:int
+    weight:float
+    height:float
+    married:Annotated[bool,Field(default=None,description='Is the patient married')]
+    allergies:Optional[List[str]]=None
+    contact_details:Dict[str,str]
 
-app=FastAPI()
+    @computed_field
+    @property
+    def calculate_bmi(self)->float:
+        bmi=round(self.weight/(self.height**2),2)
+        return bmi
 
-def loadData():
-    with open('patients.json','r') as f:
-        data=json.load(f)
-    return data
+    @model_validator(mode="after")
+    def validate_emergency_conatct(cls,model):
+        if model.age>60 and 'emergency' not in model.contact_details:
+            raise ValueError('error')
+        return model
 
-@app.get('/')
-def hello():
-    return{'message':'Patient management system api'}
+    @field_validator('email')
+    @classmethod
+    def email_validator(cls,value):
+        valid_domains=['hdfc.com']
 
-@app.get('/about')
-def about():
-    return{'message':'functional patient manage api'}
+        domain_name=value.split('@')[-1]
 
-@app.get('/view')
-def view():
-    data=loadData()
+        if(domain_name) not in valid_domains:
+            raise ValueError('Not a valid domain')
+        
+        return value
 
-    return data
-
-
-@app.get('/patient/{patient_id}')
-def view_patient(patient_id:str=Path(...,description='Id of the patient in db',examples='1')):
-    data=loadData()
-
-    if patient_id in data:
-        return data[patient_id]
-    raise HTTPException(status_code=404,detail='Patient not found')
-
-
-@app.get('/sort')
-def sort_patients(sort_by:str=Query(...,description='Sort on the basis of height,weight or bmi'),order:str=Query('asc',description='sort in asc or desc order')):
-    valid_fields=['height','weight','bmi']
-
-    if sort_by not in valid_fields:
-        raise HTTPException(status_code=400,detail=f'Invalid field select from{valid_fields}')
+    @field_validator('name')
+    @classmethod
+    def transfrom_name(cls,value):
+        return value.upper()
     
-    if order not in ['asc','desc']:
-        raise HTTPException(status_code=400,detail='Invalid order select between asc and desc')
-    
-    data=loadData()
 
-    sort_order=True if order=='desc' else False
 
-    sorted_data=sorted(data.values(),key=lambda x:x.get(sort_by,0),reverse=True)
+def insert_patient_info(patient:Patient):
+    print(patient.name)
+    print(patient.age)
+    print(patient.calculate_bmi)
+    print('Inserted')
 
-    return sorted_data
+patient_info={'name':'Diya','email':'d@hdfc.com','age':65,'weight':45,'height':'5','married':False,'contact_details':{'emergency':'124566'}}
+patient1=Patient(**patient_info)
+
+insert_patient_info(patient1)
